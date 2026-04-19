@@ -2,7 +2,7 @@ FROM python:3.11
 
 WORKDIR /app
 
-COPY pyproject.toml .
+COPY pyproject.toml README.md ./
 COPY src/ src/
 COPY data/ data/
 
