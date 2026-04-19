@@ -18,14 +18,25 @@ def _get_client() -> OpenAI:
     return _client
 
 
-def _format_chunks(chunks: list[dict]) -> str:
-    return "\n\n".join(f"[{c['source_id']}] {c['text']}" for c in chunks)
+def _format_chunks(chunks: list[dict]) -> tuple[str, str]:
+    """Returns (numbered context text, source index string)."""
+    lines = []
+    index_lines = []
+    for i, c in enumerate(chunks, 1):
+        collection = c.get("collection", "")
+        if collection == "marre_hn":
+            label = f"HackerNews — {c.get('title', '')} ({c.get('url', '')})"
+        else:
+            label = f"{c['source_id']} ({c.get('source_type', '')})"
+        lines.append(f"[SOURCE-{i}] {label}\n{c['text']}")
+        index_lines.append(f"  SOURCE-{i}: {label}")
+    return "\n\n".join(lines), "\n".join(index_lines)
 
 
 @traceable(name="writer", run_type="llm")
 def write(query: str, comparisons: list[dict], chunks: list[dict]) -> ResearchReport:
     sources_used = sorted({c["source_id"] for c in chunks})
-    context = _format_chunks(chunks)
+    context, source_index = _format_chunks(chunks)
     comparisons_text = json.dumps(comparisons, indent=2)
 
     chunk_contexts = [
@@ -47,6 +58,7 @@ def write(query: str, comparisons: list[dict], chunks: list[dict]) -> ResearchRe
             content=WRITER_USER.format(
                 query=query,
                 context=context,
+                source_index=source_index,
                 comparisons_text=comparisons_text,
                 sources_used=sources_used,
             ),
@@ -69,5 +81,10 @@ def write(query: str, comparisons: list[dict], chunks: list[dict]) -> ResearchRe
 
     raw = json.loads(response.choices[0].message.content)
     raw.setdefault("sources_used", sources_used)
+
+    # Fallback: if LLM returned empty comparisons, inject comparator results
+    if not raw.get("comparisons") and comparison_models:
+        raw["comparisons"] = [c.model_dump() for c in comparison_models]
+
     result = WriterResponse(report=ResearchReport(**raw))
     return result.report

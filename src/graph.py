@@ -32,8 +32,8 @@ def write(query: str, comparisons: list[dict], chunks: list[dict]):
 
 
 @task
-def score(report):
-    return _score(report)
+def score(report, query: str):
+    return _score(report, query)
 
 
 @task
@@ -52,7 +52,7 @@ def research_graph(query: str) -> dict:
     chunks = gather_result["chunks"]
     comparisons = compare(query, chunks).result()
     report = write(query, comparisons, chunks).result()
-    report, confidence, rationale = score(report).result()
+    report, confidence, rationale = score(report, query).result()
 
     status = "needs_review" if confidence < 0.7 else "completed"
 

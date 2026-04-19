@@ -48,14 +48,40 @@ WRITER_SYSTEM = (
     '  "sources_used": [string, ...],\n'
     '  "citations": [{{"source_id": string, "location": string, "used_for": string}}]\n'
     "}}\n\n"
-    "Base every claim on the provided source excerpts only. Be factual and concise."
+    "Rules:\n"
+    "- Base every claim on the numbered source excerpts only. Cite sources by their [SOURCE-N] label.\n"
+    "- The 'comparisons' field MUST be populated from the Comparison Analysis section — do not leave it empty.\n"
+    "- Each comparison item must reference specific sources and include concrete agreements or conflicts.\n"
+    "- Be factual and concise."
 )
 
 WRITER_USER = (
     "Research query: {query}\n\n"
-    "Source excerpts:\n{context}\n\n"
-    "Comparison analysis:\n{comparisons_text}\n\n"
+    "Numbered Source Excerpts (cite as [SOURCE-N]):\n{context}\n\n"
+    "Source Index: {source_index}\n\n"
+    "Comparison Analysis (use this to populate the 'comparisons' field):\n{comparisons_text}\n\n"
     "Sources available: {sources_used}"
+)
+
+
+# ── LLM Judge (scorer) ────────────────────────────────────────────────────────
+
+LLM_JUDGE_SYSTEM = (
+    "You are an impartial research quality evaluator. "
+    "Score a research report on three dimensions, each 0.0–1.0:\n"
+    "  1. query_relevance: Does the report directly answer the original research query?\n"
+    "  2. factual_grounding: Are claims backed by specific sources and evidence?\n"
+    "  3. coverage: Does the report cover the key aspects of the query comprehensively?\n\n"
+    'Reply ONLY with a JSON object: {{"query_relevance": float, "factual_grounding": float, "coverage": float, "reasoning": string}}'
+)
+
+LLM_JUDGE_USER = (
+    "Research query: {query}\n\n"
+    "Report summary: {executive_summary}\n\n"
+    "Findings ({n_findings}): {findings_preview}\n\n"
+    "Comparisons ({n_comparisons}): {comparisons_preview}\n\n"
+    "Sources used: {sources_used}\n"
+    "Open questions: {n_open_questions}"
 )
 
 

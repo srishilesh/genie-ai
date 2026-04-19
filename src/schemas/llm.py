@@ -94,3 +94,21 @@ class RePlannerRequest(BaseModel):
 
 class RePlannerResponse(BaseModel):
     sub_questions: list[str] = Field(min_length=1)
+
+
+# ── LLM Judge ─────────────────────────────────────────────────────────────────
+
+class LLMJudgeRequest(BaseModel):
+    query: str
+    messages: list[LLMMessage]
+
+
+class LLMJudgeResponse(BaseModel):
+    query_relevance: float = Field(ge=0.0, le=1.0)
+    factual_grounding: float = Field(ge=0.0, le=1.0)
+    coverage: float = Field(ge=0.0, le=1.0)
+    reasoning: str
+
+    @property
+    def composite(self) -> float:
+        return round((self.query_relevance + self.factual_grounding + self.coverage) / 3, 3)

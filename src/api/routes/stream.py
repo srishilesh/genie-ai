@@ -96,7 +96,7 @@ async def _pipeline(query: str, api_key: str | None) -> AsyncGenerator[str, None
 
             current_node = "scorer"
             yield _sse({"node": "scorer", "state": "running"})
-            report, confidence, rationale = await asyncio.to_thread(_score, report)
+            report, confidence, rationale = await asyncio.to_thread(_score, report, query)
             yield _sse({"node": "scorer", "state": "done", "output": {"confidence": confidence, "rationale": rationale}})
 
             # ── Confidence retry (max 1) ──────────────────────────────────────
@@ -119,7 +119,7 @@ async def _pipeline(query: str, api_key: str | None) -> AsyncGenerator[str, None
                 yield _sse({"node": "writer", "state": "done", "output": {"retry": True}})
 
                 yield _sse({"node": "scorer", "state": "running"})
-                retry_report, retry_confidence, retry_rationale = await asyncio.to_thread(_score, retry_report)
+                retry_report, retry_confidence, retry_rationale = await asyncio.to_thread(_score, retry_report, query)
                 yield _sse({"node": "scorer", "state": "done", "output": {"confidence": retry_confidence, "rationale": retry_rationale, "retry": True}})
 
                 # Use retry result if it improved, otherwise keep original
