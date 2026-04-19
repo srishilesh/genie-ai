@@ -47,6 +47,5 @@ def compare(query: str, chunks: list[dict]) -> list[dict]:
     )
     raw = response.choices[0].message.content
     parsed = json.loads(raw)
-    if isinstance(parsed, list):
-        return parsed
-    return next(iter(parsed.values()))
+    items = parsed if isinstance(parsed, list) else next(iter(parsed.values()))
+    return [c for c in items if isinstance(c, dict)]

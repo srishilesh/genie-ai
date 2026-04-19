@@ -7,7 +7,7 @@ load_dotenv(Path(__file__).parents[2] / ".env")
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from src.api.routes import research
+from src.api.routes import research, stream, runs
 from src.config import settings
 
 logging.basicConfig(level=settings.log_level)
@@ -26,6 +26,8 @@ app.add_middleware(
 )
 
 app.include_router(research.router)
+app.include_router(stream.router)
+app.include_router(runs.router)
 
 
 @app.get("/health", tags=["meta"])

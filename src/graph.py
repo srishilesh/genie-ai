@@ -54,7 +54,15 @@ def research_graph(query: str) -> dict:
 
     classification = classify(query).result()
     if classification != "research":
-        return {"status": "casual", "confidence": None, "report": None, "trace_id": trace_id}
+        return {
+            "status": "casual",
+            "confidence": None,
+            "report": None,
+            "trace_id": trace_id,
+            "pipeline": [
+                {"node": "classifier", "output": {"classification": classification}},
+            ],
+        }
 
     sub_questions = plan(query).result()
     chunks = gather(sub_questions).result()
@@ -64,6 +72,39 @@ def research_graph(query: str) -> dict:
 
     status = "needs_review" if confidence < 0.7 else "completed"
 
+    pipeline = [
+        {
+            "node": "classifier",
+            "output": {"classification": classification},
+        },
+        {
+            "node": "planner",
+            "output": {"sub_questions": sub_questions},
+        },
+        {
+            "node": "gatherer",
+            "output": {
+                "chunk_count": len(chunks),
+                "chunks": [
+                    {
+                        "source_id": c["source_id"],
+                        "source_type": c["source_type"],
+                        "preview": c["text"][:200],
+                    }
+                    for c in chunks
+                ],
+            },
+        },
+        {
+            "node": "comparator",
+            "output": {"comparisons": comparisons},
+        },
+        {
+            "node": "scorer",
+            "output": {"confidence": confidence, "rationale": rationale},
+        },
+    ]
+
     run_result = {
         "trace_id": trace_id,
         "scenario": "scenario_3_research",
@@ -72,14 +113,7 @@ def research_graph(query: str) -> dict:
         "confidence": confidence,
         "confidence_rationale": rationale,
         "artifacts": {"report": report.model_dump()},
-        "stages": [
-            {"name": "classifier", "status": "success", "started_at": created_at},
-            {"name": "planner", "status": "success", "started_at": created_at},
-            {"name": "gatherer", "status": "success", "started_at": created_at},
-            {"name": "comparator", "status": "success", "started_at": created_at},
-            {"name": "writer", "status": "success", "started_at": created_at},
-            {"name": "scorer", "status": "success", "started_at": created_at},
-        ],
+        "stages": [p["node"] for p in pipeline],
     }
 
     persist(run_result).result()
@@ -89,4 +123,5 @@ def research_graph(query: str) -> dict:
         "confidence": confidence,
         "report": report.model_dump(),
         "trace_id": trace_id,
+        "pipeline": pipeline,
     }

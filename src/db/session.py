@@ -30,7 +30,7 @@ def save_run(run_result: dict) -> None:
                 INSERT INTO agent_runs (trace_id, scenario, status, confidence,
                     confidence_rationale, artifacts, created_at)
                 VALUES (:trace_id, :scenario, :status, :confidence,
-                    :confidence_rationale, :artifacts::jsonb, :created_at)
+                    :confidence_rationale, CAST(:artifacts AS jsonb), :created_at)
                 ON CONFLICT (trace_id) DO NOTHING
                 """
             ),

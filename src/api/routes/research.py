@@ -16,6 +16,7 @@ class ResearchResponse(BaseModel):
     status: str
     confidence: float | None = None
     report: ResearchReport | None = None
+    pipeline: list[dict] | None = None
 
 
 @router.post("", response_model=ResearchResponse)
