@@ -1,6 +1,7 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from pydantic import BaseModel
 
+from src.api.utils import validate_query
 from src.graph import research_graph
 from src.schemas.report import ResearchReport
 
@@ -21,8 +22,6 @@ class ResearchResponse(BaseModel):
 
 @router.post("", response_model=ResearchResponse)
 def run_research(body: ResearchRequest) -> ResearchResponse:
-    if not body.query.strip():
-        raise HTTPException(status_code=422, detail="query must not be empty")
-
-    result = research_graph.invoke(body.query)
+    query = validate_query(body.query)
+    result = research_graph.invoke(query)
     return ResearchResponse(**result)

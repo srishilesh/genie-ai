@@ -1,6 +1,9 @@
+from langsmith import traceable
+
 from src.schemas.report import ResearchReport
 
 
+@traceable(name="scorer")
 def score(report: ResearchReport) -> tuple[ResearchReport, float, str]:
     points = 0.0
     reasons = []

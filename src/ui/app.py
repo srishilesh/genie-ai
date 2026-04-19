@@ -135,27 +135,34 @@ def render_result(final: dict, node_outputs: dict) -> None:
         for node, output in node_outputs.items():
             icon = NODE_ICONS.get(node, "⚙️")
             with st.expander(f"{icon} **{node.capitalize()}**", expanded=False):
-                if node == "classifier":
-                    st.markdown(f"**Classification:** `{output.get('classification', '—')}`")
-                elif node == "planner":
+                if node == "planner":
                     st.markdown("**Sub-questions:**")
                     for i, q in enumerate(output.get("sub_questions", []), 1):
                         st.markdown(f"{i}. {q}")
                 elif node == "gatherer":
+                    selected = output.get("selected_source", "—")
+                    hn_fetched = output.get("hn_fetched", 0)
+                    local_avg = output.get("local_avg_distance", "—")
+                    hn_avg = output.get("hn_avg_distance")
                     chunks = output.get("chunks", [])
-                    rag = [c for c in chunks if c["source_id"] != "hackernews"]
-                    hn  = [c for c in chunks if c["source_id"] == "hackernews"]
+                    local = [c for c in chunks if c.get("collection") != "marre_hn"]
+                    hn = [c for c in chunks if c.get("collection") == "marre_hn"]
+
+                    st.markdown(f"**Selected source:** `{selected}` | **{len(chunks)} chunks used**")
                     st.markdown(
-                        f"**{len(chunks)} total chunks** — "
-                        f"{output.get('rag_count', len(rag))} from knowledge base, "
-                        f"{output.get('hn_count', len(hn))} from HackerNews"
+                        f"- HN API fetched: `{hn_fetched}` results\n"
+                        f"- Local avg distance: `{local_avg}` | "
+                        f"HN avg distance: `{hn_avg if hn_avg is not None else '∞ (no results)'}`"
                     )
-                    if rag:
+                    hn_warning = output.get("hn_warning")
+                    if hn_warning:
+                        st.warning(f"⚠️ {hn_warning}")
+                    if local:
                         st.markdown("**📚 Knowledge Base**")
-                        for c in rag:
+                        for c in local:
                             st.markdown(f"- `{c['source_id']}` ({c['source_type']}) — *{c['preview']}…*")
                     if hn:
-                        st.markdown("**💬 HackerNews (last 6 months)**")
+                        st.markdown("**💬 HackerNews**")
                         for c in hn:
                             title = c.get("title", "")
                             url = c.get("url", "")
@@ -177,7 +184,7 @@ def render_result(final: dict, node_outputs: dict) -> None:
                     st.json(output)
 
     if not report:
-        st.info("Query classified as casual — no report generated.")
+        st.info("No report generated — insufficient results from both sources.")
         return
 
     st.divider()
@@ -266,6 +273,14 @@ if run_btn and query.strip():
                         if node == "done":
                             final = event
                             status_ui.update(label="✅ Research complete!", state="complete", expanded=False)
+                        elif state == "error":
+                            err_msg = event.get("error", "Unknown error")
+                            status_ui.update(label=f"❌ Failed at {label}", state="error", expanded=True)
+                            st.error(f"**Pipeline failed at `{node}`:** {err_msg}")
+                            trace_lines = event.get("trace", [])
+                            if trace_lines:
+                                st.code("\n".join(trace_lines), language="python")
+                            st.stop()
                         elif state == "running":
                             status_ui.write(f"{icon} **{label}…**")
                         elif state == "done":

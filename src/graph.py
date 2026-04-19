@@ -3,7 +3,6 @@ from datetime import datetime, timezone
 
 from langgraph.func import entrypoint, task
 
-from src.agents.classifier import classify as _classify
 from src.agents.planner import plan as _plan
 from src.agents.gatherer import gather as _gather
 from src.agents.comparator import compare as _compare
@@ -13,18 +12,13 @@ from src.agents.persist import persist as _persist
 
 
 @task
-def classify(query: str) -> str:
-    return _classify(query)
-
-
-@task
 def plan(query: str) -> list[str]:
     return _plan(query)
 
 
 @task
-def gather(query: str, sub_questions: list[str], research_type: str) -> list[dict]:
-    return _gather(query, sub_questions, research_type=research_type)
+def gather(query: str, sub_questions: list[str]) -> dict:
+    return _gather(query, sub_questions)
 
 
 @task
@@ -52,22 +46,10 @@ def research_graph(query: str) -> dict:
     trace_id = str(uuid.uuid4())
     created_at = datetime.now(timezone.utc).isoformat()
 
-    classification = classify(query).result()
-    if classification == "casual":
-        return {
-            "status": "casual",
-            "confidence": None,
-            "report": None,
-            "trace_id": trace_id,
-            "pipeline": [
-                {"node": "classifier", "output": {"classification": classification}},
-            ],
-        }
-
-    research_type = classification  # local_research | hn_research
-
     sub_questions = plan(query).result()
-    chunks = gather(query, sub_questions, research_type).result()
+    gather_result = gather(query, sub_questions).result()
+
+    chunks = gather_result["chunks"]
     comparisons = compare(query, chunks).result()
     report = write(query, comparisons, chunks).result()
     report, confidence, rationale = score(report).result()
@@ -75,12 +57,14 @@ def research_graph(query: str) -> dict:
     status = "needs_review" if confidence < 0.7 else "completed"
 
     pipeline = [
-        {"node": "classifier", "output": {"classification": classification, "research_type": research_type}},
         {"node": "planner", "output": {"sub_questions": sub_questions}},
         {
             "node": "gatherer",
             "output": {
-                "research_type": research_type,
+                "selected_source": gather_result["selected_source"],
+                "hn_fetched": gather_result["hn_fetched"],
+                "local_avg_distance": gather_result["local_avg_distance"],
+                "hn_avg_distance": gather_result["hn_avg_distance"],
                 "chunk_count": len(chunks),
                 "chunks": [
                     {

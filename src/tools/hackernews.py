@@ -6,12 +6,18 @@ import json
 import os
 from datetime import datetime, timedelta, timezone
 
+from dotenv import load_dotenv
 import httpx
 from openai import OpenAI
+
+from src.prompts import HN_FILTER_SYSTEM, HN_FILTER_USER
+from src.schemas.llm import HNFilterRequest, HNFilterResponse, LLMMessage
 
 _HN_API = "https://hn.algolia.com/api/v1/search"
 _CUTOFF_MONTHS = 6
 _client: OpenAI | None = None
+
+load_dotenv()
 
 
 def _get_client() -> OpenAI:
@@ -50,30 +56,25 @@ def _filter_relevant(query: str, hits: list[dict]) -> list[dict]:
         f"{i}. {h.get('title', '')} — {(h.get('story_text') or h.get('url') or '')[:200]}"
         for i, h in enumerate(hits)
     ]
+    summaries_text = "\n".join(summaries)
+
+    messages = [
+        LLMMessage(role="system", content=HN_FILTER_SYSTEM),
+        LLMMessage(role="user", content=HN_FILTER_USER.format(query=query, summaries=summaries_text)),
+    ]
+    request = HNFilterRequest(query=query, summaries=summaries, messages=messages)
 
     response = _get_client().chat.completions.create(
         model="gpt-4o",
-        messages=[
-            {
-                "role": "system",
-                "content": (
-                    "You filter HackerNews results for relevance to a research query. "
-                    "Reply ONLY with a JSON array of the 0-based indices of results that are "
-                    "genuinely relevant to the query. Be selective — return at most 5."
-                ),
-            },
-            {
-                "role": "user",
-                "content": f"Query: {query}\n\nResults:\n" + "\n".join(summaries),
-            },
-        ],
+        messages=[m.model_dump() for m in request.messages],
         temperature=0,
         response_format={"type": "json_object"},
     )
 
     raw = json.loads(response.choices[0].message.content)
-    indices = raw if isinstance(raw, list) else next(iter(raw.values()), [])
-    return [hits[i] for i in indices if isinstance(i, int) and i < len(hits)]
+    indices_raw = raw if isinstance(raw, list) else next(iter(raw.values()), [])
+    result = HNFilterResponse(indices=[i for i in indices_raw if isinstance(i, int) and i < len(hits)])
+    return [hits[i] for i in result.indices]
 
 
 def _to_chunks(hits: list[dict], chunk_offset: int = 0) -> list[dict]:
@@ -109,8 +110,15 @@ def _to_chunks(hits: list[dict], chunk_offset: int = 0) -> list[dict]:
     return chunks
 
 
-def get_hn_chunks(query: str, n_search: int = 20) -> list[dict]:
+def get_hn_chunks(
+    query: str,
+    n_search: int = 20,
+    filter_recent: bool = False,
+    filter_relevant: bool = False,
+) -> list[dict]:
     hits = _search(query, n=n_search)
-    hits = _filter_recent(hits)
-    hits = _filter_relevant(query, hits)
+    if filter_recent:
+        hits = _filter_recent(hits)
+    if filter_relevant:
+        hits = _filter_relevant(query, hits)
     return _to_chunks(hits)
