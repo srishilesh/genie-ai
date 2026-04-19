@@ -41,25 +41,29 @@ def gather(query: str, sub_questions: list[str], n_per_question: int = _N_PER_QU
     hn_warning: str | None = None
     _MAX_HN_RETRIES = 3
 
-    def _try_hn(q: str) -> list[dict]:
+    def _fetch_and_index(q: str) -> list[dict]:
+        """Fetch from HN API, then index. hn_fetched is set before indexing so API hits are always visible."""
+        nonlocal hn_fetched
         raw = get_hn_chunks(q)
+        hn_fetched = len(raw)  # always reflects API result regardless of index success
         if raw:
-            ingest_hn_chunks(raw)
-            log.info("HN: fetched and indexed %d chunks for query=%r", len(raw), q)
+            try:
+                ingest_hn_chunks(raw)
+                log.info("HN: fetched %d, indexed for query=%r", hn_fetched, q)
+            except Exception as idx_exc:
+                log.warning("HN: fetched %d but indexing failed: %s", hn_fetched, idx_exc)
         return raw
 
     try:
-        raw = _try_hn(query)
-        hn_fetched = len(raw)
+        raw = _fetch_and_index(query)
 
         if not raw:
             log.warning("HN: 0 results for original query — generating variations")
             variations = get_query_variations(query)
             for i, variation in enumerate(variations[:_MAX_HN_RETRIES], 1):
                 log.info("HN retry %d/%d with variation=%r", i, _MAX_HN_RETRIES, variation)
-                raw = _try_hn(variation)
+                raw = _fetch_and_index(variation)
                 if raw:
-                    hn_fetched = len(raw)
                     log.info("HN: found %d results on retry %d", hn_fetched, i)
                     break
 
