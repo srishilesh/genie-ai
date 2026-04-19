@@ -14,13 +14,13 @@ COPY pyproject.toml README.md alembic.ini ./
 # Install deps with retries and higher timeout to survive flaky PyPI
 RUN pip install --no-cache-dir --timeout 120 --retries 5 \
     fastapi uvicorn[standard] python-dotenv pydantic pydantic-settings \
-    langgraph langchain-openai langchain-anthropic \
+    langgraph \
     chromadb \
     sqlalchemy[asyncio] asyncpg psycopg2-binary alembic \
-    openai anthropic \
+    openai \
     pypdf beautifulsoup4 lxml \
     langsmith \
-    httpx tenacity \
+    httpx \
     streamlit \
     hatchling
 

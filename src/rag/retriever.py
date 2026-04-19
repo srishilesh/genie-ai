@@ -42,27 +42,3 @@ def retrieve(
         }
         for doc, meta, dist in zip(documents, metadatas, distances)
     ]
-
-
-def _avg_distance(chunks: list[dict]) -> float:
-    if not chunks:
-        return float("inf")
-    return sum(c["distance"] for c in chunks) / len(chunks)
-
-
-def retrieve_best(query: str, n_per_collection: int = 6) -> tuple[list[dict], str]:
-    """Query both collections; return chunks from whichever has better avg relevance."""
-    local = retrieve(query, n_results=n_per_collection, collection_name=COLLECTION_LOCAL)
-    hn = retrieve(query, n_results=n_per_collection, collection_name=COLLECTION_HN)
-    if _avg_distance(local) <= _avg_distance(hn):
-        return local, COLLECTION_LOCAL
-    return hn, COLLECTION_HN
-
-
-def retrieve_all(query: str, n_per_collection: int = 6) -> list[dict]:
-    """Search both local KB and HN collection, merge by relevance (distance)."""
-    local = retrieve(query, n_results=n_per_collection, collection_name=COLLECTION_LOCAL)
-    hn = retrieve(query, n_results=n_per_collection, collection_name=COLLECTION_HN)
-    combined = local + hn
-    combined.sort(key=lambda c: c["distance"])
-    return combined
