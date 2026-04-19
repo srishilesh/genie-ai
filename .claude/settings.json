@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /home/shilesh/shilesh/Personal/Projects/mgt-ai-assessment/genie-ai/.claude/hooks/log_changes.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

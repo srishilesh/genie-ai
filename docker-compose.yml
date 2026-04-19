@@ -1,0 +1,36 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-genie}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-genie_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-genie_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-genie}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://genie:genie_pass@postgres:5432/genie_db
+      CHROMA_PERSIST_DIR: /app/chroma_store
+    volumes:
+      - ./chroma_store:/app/chroma_store
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

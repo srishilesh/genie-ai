@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ResearchReport",
+  "type": "object",
+  "required": [
+    "topic",
+    "executive_summary",
+    "findings",
+    "comparisons",
+    "open_questions",
+    "sources_used"
+  ],
+  "properties": {
+    "topic": {
+      "type": "string"
+    },
+    "executive_summary": {
+      "type": "string"
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "comparisons": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "claim",
+          "agreement",
+          "conflicts"
+        ],
+        "properties": {
+          "claim": {
+            "type": "string"
+          },
+          "agreement": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "conflicts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        }
+      }
+    },
+    "recommendation": {
+      "type": "string"
+    },
+    "open_questions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "sources_used": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "citations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "source_id",
+          "location",
+          "used_for"
+        ],
+        "properties": {
+          "source_id": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string"
+          },
+          "used_for": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": true
+}
