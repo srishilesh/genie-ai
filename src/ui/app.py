@@ -77,6 +77,11 @@ with st.sidebar:
                     except Exception:
                         artifacts = {}
                 report = (artifacts or {}).get("report") if artifacts else run.get("report")
+                if isinstance(report, str):
+                    try:
+                        report = json.loads(report)
+                    except Exception:
+                        report = {}
                 st.session_state.loaded_result = {
                     "trace_id": run.get("trace_id"),
                     "status": status,
@@ -106,6 +111,11 @@ def render_result(final: dict, node_outputs: dict) -> None:
     confidence = final.get("confidence")
     trace_id = final.get("trace_id", "—")
     report = final.get("report")
+    if isinstance(report, str):
+        try:
+            report = json.loads(report)
+        except Exception:
+            report = {}
 
     c1, c2, c3 = st.columns(3)
     with c1:
@@ -133,9 +143,24 @@ def render_result(final: dict, node_outputs: dict) -> None:
                         st.markdown(f"{i}. {q}")
                 elif node == "gatherer":
                     chunks = output.get("chunks", [])
-                    st.markdown(f"**{output.get('chunk_count', len(chunks))} chunks retrieved:**")
-                    for c in chunks:
-                        st.markdown(f"- `{c['source_id']}` ({c['source_type']}) — *{c['preview']}…*")
+                    rag = [c for c in chunks if c["source_id"] != "hackernews"]
+                    hn  = [c for c in chunks if c["source_id"] == "hackernews"]
+                    st.markdown(
+                        f"**{len(chunks)} total chunks** — "
+                        f"{output.get('rag_count', len(rag))} from knowledge base, "
+                        f"{output.get('hn_count', len(hn))} from HackerNews"
+                    )
+                    if rag:
+                        st.markdown("**📚 Knowledge Base**")
+                        for c in rag:
+                            st.markdown(f"- `{c['source_id']}` ({c['source_type']}) — *{c['preview']}…*")
+                    if hn:
+                        st.markdown("**💬 HackerNews (last 6 months)**")
+                        for c in hn:
+                            title = c.get("title", "")
+                            url = c.get("url", "")
+                            link = f"[{title}]({url})" if url else title
+                            st.markdown(f"- {link} — *{c['preview'][:150]}…*")
                 elif node == "comparator":
                     for comp in output.get("comparisons", []):
                         if not isinstance(comp, dict):

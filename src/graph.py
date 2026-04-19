@@ -23,8 +23,8 @@ def plan(query: str) -> list[str]:
 
 
 @task
-def gather(sub_questions: list[str]) -> list[dict]:
-    return _gather(sub_questions)
+def gather(query: str, sub_questions: list[str], research_type: str) -> list[dict]:
+    return _gather(query, sub_questions, research_type=research_type)
 
 
 @task
@@ -53,7 +53,7 @@ def research_graph(query: str) -> dict:
     created_at = datetime.now(timezone.utc).isoformat()
 
     classification = classify(query).result()
-    if classification != "research":
+    if classification == "casual":
         return {
             "status": "casual",
             "confidence": None,
@@ -64,8 +64,10 @@ def research_graph(query: str) -> dict:
             ],
         }
 
+    research_type = classification  # local_research | hn_research
+
     sub_questions = plan(query).result()
-    chunks = gather(sub_questions).result()
+    chunks = gather(query, sub_questions, research_type).result()
     comparisons = compare(query, chunks).result()
     report = write(query, comparisons, chunks).result()
     report, confidence, rationale = score(report).result()
@@ -73,36 +75,27 @@ def research_graph(query: str) -> dict:
     status = "needs_review" if confidence < 0.7 else "completed"
 
     pipeline = [
-        {
-            "node": "classifier",
-            "output": {"classification": classification},
-        },
-        {
-            "node": "planner",
-            "output": {"sub_questions": sub_questions},
-        },
+        {"node": "classifier", "output": {"classification": classification, "research_type": research_type}},
+        {"node": "planner", "output": {"sub_questions": sub_questions}},
         {
             "node": "gatherer",
             "output": {
+                "research_type": research_type,
                 "chunk_count": len(chunks),
                 "chunks": [
                     {
                         "source_id": c["source_id"],
                         "source_type": c["source_type"],
+                        "collection": c.get("collection", ""),
+                        "title": c.get("title", ""),
                         "preview": c["text"][:200],
                     }
                     for c in chunks
                 ],
             },
         },
-        {
-            "node": "comparator",
-            "output": {"comparisons": comparisons},
-        },
-        {
-            "node": "scorer",
-            "output": {"confidence": confidence, "rationale": rationale},
-        },
+        {"node": "comparator", "output": {"comparisons": comparisons}},
+        {"node": "scorer", "output": {"confidence": confidence, "rationale": rationale}},
     ]
 
     run_result = {

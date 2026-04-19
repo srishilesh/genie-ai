@@ -1,85 +1,86 @@
 # TODO — Genie AI (MARRE)
 
-## Phase 1 — Active
+## Phase 1 — ✅ Complete
 
-### Setup
-- [x] Add all dependencies to `pyproject.toml`
-- [x] Docker Compose — Postgres + FastAPI (Dockerfile added)
-- [ ] `pip install -e .` confirmed working end-to-end
+- [x] Dependencies, Docker Compose (Postgres + API + UI), Dockerfile
+- [x] RAG ingestion — HTML, CSV, TXT, PDF → ChromaDB (`marre_phase1`, 12 chunks)
+- [x] Embeddings — OpenAI `text-embedding-3-small` (lazy client)
+- [x] PostgreSQL — `agent_runs` table, Alembic auto-migration on startup
+- [x] Pydantic schemas — `ResearchReport`, `AgentRunResult`
+- [x] LangGraph graph — 7 nodes: classifier → planner → gatherer → comparator → writer → scorer → persist
+- [x] FastAPI — `/health`, `POST /research` (sync), `POST /research/stream` (SSE), `GET /runs/recent`
+- [x] Streamlit UI — live pipeline trace, sidebar with API key + recent runs, click-to-load history
 
-### RAG — Ingestion
-- [x] `src/rag/loaders.py` — HTML, CSV, TXT, PDF parsers
-- [x] `src/rag/embeddings.py` — OpenAI `text-embedding-3-small` (lazy client)
-- [x] `src/rag/client.py` — ChromaDB PersistentClient + `ingest_documents()`
-- [x] `src/rag/retriever.py` — `retrieve()` with optional source filter
-- [x] `scripts/ingest.py` — ingestion confirmed working (12 chunks)
+---
 
-### Database (`src/db/`)
-- [x] `src/db/session.py` — sync SQLAlchemy engine + `save_run()`
-- [x] `alembic/versions/0001_create_agent_runs.py` — `agent_runs` table migration
-- [x] `psycopg2-binary` added to `pyproject.toml`
-- [ ] `docker compose up -d postgres` + `alembic upgrade head` confirmed working
+## Phase 2 — 🔄 Active
 
-### Schemas (`src/schemas/`)
-- [x] `src/schemas/report.py` — `ResearchReport` Pydantic model
-- [x] `src/schemas/run.py` — `AgentRunResult` Pydantic model
+### Algolia / HackerNews ✅
+- [x] `src/tools/hackernews.py` — public Algolia HN API (no key needed)
+- [x] Date filter: discard items older than 6 months
+- [x] LLM relevance filter: GPT-4o selects top 5 relevant results
+- [x] Merged into `gatherer` node with `source_id: "hackernews"`, `source_type: "community"`
+- [x] UI: RAG vs HN chunks shown separately in pipeline trace with clickable URLs
 
-### LangGraph Graph
-- [x] `src/agents/classifier.py` — GPT-4o research vs casual
-- [x] `src/agents/planner.py` — GPT-4o sub-question breakdown
-- [x] `src/agents/gatherer.py` — RAG retrieval, deduplicated
-- [x] `src/agents/comparator.py` — GPT-4o conflicts & agreements
-- [x] `src/agents/writer.py` — GPT-4o ResearchReport JSON
-- [x] `src/agents/scorer.py` — heuristic confidence score
-- [x] `src/agents/persist.py` — DB save with JSONL fallback
-- [x] `src/graph.py` — all nodes wired under `@entrypoint`
+### Tavily (Web Search) — Parked
+- [ ] `src/tools/tavily.py` — parked until after productionalization
 
-### FastAPI
-- [x] `src/api/main.py` — app init, CORS, /health
-- [x] `src/api/routes/research.py` — POST /research (sync invoke)
+### Firecrawl (Scraping) — Parked
+- [ ] `src/tools/firecrawl.py` — parked until after productionalization
 
-### Remaining before Phase 1 complete
-- [ ] `pip install -e .` + `alembic upgrade head` confirmed end-to-end
-- [ ] End-to-end test: `POST /research` with a real query returns valid ResearchReport
-- [ ] Update README with final Phase 1 status
+---
 
-## Ideas & Improvements
+## Productionalization — 🔜 Next
 
-### Chunking Optimization
-- [ ] Benchmark current fixed-size chunking vs semantic chunking (e.g. `langchain` `SemanticChunker`)
-- [ ] Per-source-type chunk strategies: smaller chunks for CSV rows, larger for PDF narrative
-- [ ] Overlap tuning — experiment with 10–20% overlap to reduce context loss at boundaries
-- [ ] Evaluate chunk quality via retrieval hit-rate on known queries
+### Reliability
+- [ ] Retry logic on all LLM calls (tenacity — already in deps)
+- [ ] Timeout per node with graceful degradation (skip HN if it times out)
+- [ ] Health check endpoint extended: DB connectivity + ChromaDB status
+- [ ] Structured logging (JSON log lines) via `python-json-logger`
 
-### Latency Improvements
-- [ ] Parallelize `planner` sub-questions — run gatherer for each sub-question concurrently (`asyncio.gather`)
-- [ ] Cache embeddings for repeated queries (in-memory LRU or Redis)
-- [ ] Switch writer node to streaming mode and surface partial output to API caller
-- [ ] Profile each graph node; identify and optimize the slowest stage
+### Security
+- [ ] API key auth on all endpoints (`X-Api-Key` header, env-configured)
+- [ ] Rate limiting (`slowapi`)
+- [ ] Input sanitization — max query length, strip dangerous chars
 
-### Confidence Scoring Methods
-- [ ] Extend beyond heuristics: use LLM self-evaluation (ask model to rate its own answer confidence)
-- [ ] Cross-source agreement as a signal: higher agreement → higher confidence
-- [ ] Citation coverage: penalize reports that cite fewer than N sources
-- [ ] Explore `RAGAS` faithfulness + answer relevance metrics as inline confidence signals (Phase 4 integration)
-- [ ] Track confidence distribution over time in PostgreSQL for drift detection
+### Observability
+- [ ] Per-node timing logged to `agent_runs.stages` JSONB column
+- [ ] Token usage tracked per LLM call and stored in DB
+- [ ] `GET /runs/{trace_id}` — full run detail endpoint
 
-### PostgreSQL — Logging & Tracing
-- [ ] Add `run_logs` table: per-node execution times, token counts, error messages
-- [ ] Store raw LLM prompts + responses in a `llm_traces` table (opt-in via env flag)
-- [ ] Add `trace_id` propagation through all agent nodes → correlate logs end-to-end
-- [ ] Expose `/runs/{trace_id}` GET endpoint to retrieve full run trace from DB
-- [ ] Add index on `agent_runs.created_at` and `agent_runs.status` for dashboard queries
+### Deployment
+- [ ] `.dockerignore` to exclude `chroma_store/`, `working/`, `.env`
+- [ ] Multi-stage Dockerfile (build → slim runtime)
+- [ ] `docker compose` production profile with resource limits
+- [ ] Environment validation on startup (fail fast if required keys missing)
 
-## Phase 2 — Pending
-- [ ] Tavily web search integration
-- [ ] Algolia / HackerNews with 6-month LLM filter
-- [ ] Firecrawl scraping
+---
 
 ## Phase 3 — Pending
-- [ ] Streamlit UI
-- [ ] Langfuse or Langsmith observability
+- [x] Streamlit UI (moved up, done in Phase 1)
+- [ ] Langfuse or Langsmith observability — trace LLM calls per node
+- [ ] Langfuse dashboard: token counts, latency per node, confidence trends
 
 ## Phase 4 — Pending
-- [ ] RAGAS evaluations
-- [ ] Safety guardrails
+- [ ] RAGAS evaluations — faithfulness, answer relevance, context recall
+- [ ] Safety guardrails — prompt injection detection, output validation
+
+---
+
+## Ideas & Improvements (Backlog)
+
+### Chunking
+- [ ] Semantic chunking vs fixed-size — benchmark retrieval hit-rate
+- [ ] Per-source chunk size tuning (CSV smaller, PDF larger)
+
+### Latency
+- [ ] Parallelize gatherer sub-question retrieval with `asyncio.gather`
+- [ ] LRU cache for repeated embeddings
+
+### Confidence Scoring
+- [ ] LLM self-evaluation as confidence signal
+- [ ] RAGAS faithfulness metric as inline scorer (Phase 4)
+
+### PostgreSQL
+- [ ] `run_logs` table — per-node timing + token counts
+- [ ] `GET /runs/{trace_id}` — full trace retrieval endpoint

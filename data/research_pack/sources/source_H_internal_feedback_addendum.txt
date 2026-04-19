@@ -1,0 +1,7 @@
+Internal Stakeholder Feedback Addendum
+Date: 2026-03-05
+
+- Operations: Very impressed with DataStream AI's handwriting recognition for the Asian market forms. This could save 20 hours/week.
+- Legal: Flagging DataStream AI's 'Global Dynamic Routing'. We need to confirm if we can pin data to EU regions specifically for our German branch.
+- Procurement: DataStream's $48k base is very close to our $50k limit. We need to ensure no hidden 'implementation fees' push it over.
+- IT Security: DataStream's reported 99.0% SLA in the contract template is lower than the 99.99% stated in their marketing deck. Need to clarify which one is binding.

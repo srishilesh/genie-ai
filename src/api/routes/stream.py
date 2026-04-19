@@ -48,14 +48,23 @@ async def _pipeline(query: str, api_key: str | None) -> AsyncGenerator[str, None
     yield _sse({"node": "planner", "state": "done", "output": {"sub_questions": sub_questions}})
 
     yield _sse({"node": "gatherer", "state": "running"})
-    chunks = await asyncio.to_thread(_gather, sub_questions)
+    chunks = await asyncio.to_thread(_gather, query, sub_questions)
+    rag_chunks = [c for c in chunks if c["source_id"] != "hackernews"]
+    hn_chunks  = [c for c in chunks if c["source_id"] == "hackernews"]
     yield _sse({
         "node": "gatherer",
         "state": "done",
         "output": {
             "chunk_count": len(chunks),
+            "rag_count": len(rag_chunks),
+            "hn_count": len(hn_chunks),
             "chunks": [
-                {"source_id": c["source_id"], "source_type": c["source_type"], "preview": c["text"][:200]}
+                {
+                    "source_id": c["source_id"],
+                    "source_type": c["source_type"],
+                    "preview": c["text"][:200],
+                    **({"url": c["url"], "title": c["title"]} if c["source_id"] == "hackernews" else {}),
+                }
                 for c in chunks
             ],
         },
