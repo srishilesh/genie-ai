@@ -12,7 +12,7 @@ from langsmith import trace as ls_trace
 from pydantic import BaseModel
 
 from src.api.utils import validate_query
-from src.agents.planner import plan as _plan
+from src.agents.planner import plan as _plan, replan as _replan
 from src.agents.gatherer import gather as _gather
 from src.agents.comparator import compare as _compare
 from src.agents.writer import write as _write
@@ -98,6 +98,34 @@ async def _pipeline(query: str, api_key: str | None) -> AsyncGenerator[str, None
             yield _sse({"node": "scorer", "state": "running"})
             report, confidence, rationale = await asyncio.to_thread(_score, report)
             yield _sse({"node": "scorer", "state": "done", "output": {"confidence": confidence, "rationale": rationale}})
+
+            # ── Confidence retry (max 1) ──────────────────────────────────────
+            if confidence < 0.7:
+                yield _sse({"node": "replanner", "state": "running", "output": {"reason": f"confidence={confidence:.3f} < 0.7 — retrying with focused sub-questions"}})
+                retry_sub_questions = await asyncio.to_thread(_replan, query, sub_questions, confidence, rationale)
+                yield _sse({"node": "replanner", "state": "done", "output": {"sub_questions": retry_sub_questions}})
+
+                yield _sse({"node": "gatherer", "state": "running"})
+                retry_gather = await asyncio.to_thread(_gather, query, retry_sub_questions)
+                retry_chunks = retry_gather["chunks"]
+                yield _sse({"node": "gatherer", "state": "done", "output": {"chunk_count": len(retry_chunks), "selected_source": retry_gather["selected_source"], "retry": True}})
+
+                yield _sse({"node": "comparator", "state": "running"})
+                retry_comparisons = await asyncio.to_thread(_compare, query, retry_chunks)
+                yield _sse({"node": "comparator", "state": "done", "output": {"comparisons": retry_comparisons, "retry": True}})
+
+                yield _sse({"node": "writer", "state": "running"})
+                retry_report = await asyncio.to_thread(_write, query, retry_comparisons, retry_chunks)
+                yield _sse({"node": "writer", "state": "done", "output": {"retry": True}})
+
+                yield _sse({"node": "scorer", "state": "running"})
+                retry_report, retry_confidence, retry_rationale = await asyncio.to_thread(_score, retry_report)
+                yield _sse({"node": "scorer", "state": "done", "output": {"confidence": retry_confidence, "rationale": retry_rationale, "retry": True}})
+
+                # Use retry result if it improved, otherwise keep original
+                if retry_confidence >= confidence:
+                    report, confidence, rationale = retry_report, retry_confidence, retry_rationale
+                    sub_questions = retry_sub_questions
 
             status = "needs_review" if confidence < 0.7 else "completed"
 

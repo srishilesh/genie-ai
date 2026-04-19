@@ -69,3 +69,28 @@ class HNFilterRequest(BaseModel):
 
 class HNFilterResponse(BaseModel):
     indices: list[int]
+
+
+# ── HackerNews query variation ────────────────────────────────────────────────
+
+class HNVariationRequest(BaseModel):
+    query: str
+    messages: list[LLMMessage]
+
+
+class HNVariationResponse(BaseModel):
+    variations: list[str] = Field(min_length=1)
+
+
+# ── Re-planner ────────────────────────────────────────────────────────────────
+
+class RePlannerRequest(BaseModel):
+    query: str
+    prev_sub_questions: list[str]
+    confidence: float
+    rationale: str
+    messages: list[LLMMessage]
+
+
+class RePlannerResponse(BaseModel):
+    sub_questions: list[str] = Field(min_length=1)

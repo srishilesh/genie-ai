@@ -8,10 +8,12 @@ from datetime import datetime, timedelta, timezone
 
 from dotenv import load_dotenv
 import httpx
+from langsmith import traceable
+from langsmith.wrappers import wrap_openai
 from openai import OpenAI
 
-from src.prompts import HN_FILTER_SYSTEM, HN_FILTER_USER
-from src.schemas.llm import HNFilterRequest, HNFilterResponse, LLMMessage
+from src.prompts import HN_FILTER_SYSTEM, HN_FILTER_USER, HN_VARIATION_SYSTEM, HN_VARIATION_USER
+from src.schemas.llm import HNFilterRequest, HNFilterResponse, HNVariationRequest, HNVariationResponse, LLMMessage
 
 _HN_API = "https://hn.algolia.com/api/v1/search"
 _CUTOFF_MONTHS = 6
@@ -23,10 +25,11 @@ load_dotenv()
 def _get_client() -> OpenAI:
     global _client
     if _client is None:
-        _client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+        _client = wrap_openai(OpenAI(api_key=os.environ["OPENAI_API_KEY"]))
     return _client
 
 
+@traceable(name="hn_api_search", run_type="tool", metadata={"source": "algolia_hn"})
 def _search(query: str, n: int = 20) -> list[dict]:
     resp = httpx.get(
         _HN_API,
@@ -34,7 +37,8 @@ def _search(query: str, n: int = 20) -> list[dict]:
         timeout=10,
     )
     resp.raise_for_status()
-    return resp.json().get("hits", [])
+    hits = resp.json().get("hits", [])
+    return hits
 
 
 def _filter_recent(hits: list[dict], months: int = _CUTOFF_MONTHS) -> list[dict]:
@@ -48,6 +52,7 @@ def _filter_recent(hits: list[dict], months: int = _CUTOFF_MONTHS) -> list[dict]
     return recent
 
 
+@traceable(name="hn_filter_relevant", run_type="llm")
 def _filter_relevant(query: str, hits: list[dict]) -> list[dict]:
     if not hits:
         return []
@@ -110,6 +115,27 @@ def _to_chunks(hits: list[dict], chunk_offset: int = 0) -> list[dict]:
     return chunks
 
 
+@traceable(name="hn_get_query_variations", run_type="llm")
+def get_query_variations(query: str) -> list[str]:
+    """Generate 3 keyword variations of the query for HN retry."""
+    messages = [
+        LLMMessage(role="system", content=HN_VARIATION_SYSTEM),
+        LLMMessage(role="user", content=HN_VARIATION_USER.format(query=query)),
+    ]
+    request = HNVariationRequest(query=query, messages=messages)
+    response = _get_client().chat.completions.create(
+        model="gpt-4o",
+        messages=[m.model_dump() for m in request.messages],
+        temperature=0.3,
+        response_format={"type": "json_object"},
+    )
+    raw = json.loads(response.choices[0].message.content)
+    variations_raw = raw if isinstance(raw, list) else next(iter(raw.values()), [])
+    result = HNVariationResponse(variations=[v for v in variations_raw if isinstance(v, str)])
+    return result.variations
+
+
+@traceable(name="hn_get_chunks", run_type="tool")
 def get_hn_chunks(
     query: str,
     n_search: int = 20,

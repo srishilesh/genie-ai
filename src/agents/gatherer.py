@@ -4,7 +4,7 @@ from langsmith import traceable
 
 from src.rag.client import ingest_hn_chunks
 from src.rag.retriever import retrieve, COLLECTION_LOCAL, COLLECTION_HN
-from src.tools.hackernews import get_hn_chunks
+from src.tools.hackernews import get_hn_chunks, get_query_variations
 
 log = logging.getLogger(__name__)
 
@@ -36,18 +36,39 @@ def gather(query: str, sub_questions: list[str], n_per_question: int = _N_PER_QU
 
     Returns dict with chunks + metadata for stream visibility.
     """
-    # ── 1. HN: always fetch live and index ───────────────────────────────────
+    # ── 1. HN: fetch live with up to 3 retries using query variations ─────────
     hn_fetched = 0
     hn_warning: str | None = None
-    try:
-        raw = get_hn_chunks(query)
-        hn_fetched = len(raw)
+    _MAX_HN_RETRIES = 3
+
+    def _try_hn(q: str) -> list[dict]:
+        raw = get_hn_chunks(q)
         if raw:
             ingest_hn_chunks(raw)
-            log.info("HN: fetched and indexed %d chunks", hn_fetched)
-        else:
-            log.warning("HN: 0 results — query may be too specific or unsupported")
-            hn_warning = "HackerNews returned 0 results. The query may be too specific or phrased in a way that HN search doesn't recognise. Results are from local sources only — manual review recommended."
+            log.info("HN: fetched and indexed %d chunks for query=%r", len(raw), q)
+        return raw
+
+    try:
+        raw = _try_hn(query)
+        hn_fetched = len(raw)
+
+        if not raw:
+            log.warning("HN: 0 results for original query — generating variations")
+            variations = get_query_variations(query)
+            for i, variation in enumerate(variations[:_MAX_HN_RETRIES], 1):
+                log.info("HN retry %d/%d with variation=%r", i, _MAX_HN_RETRIES, variation)
+                raw = _try_hn(variation)
+                if raw:
+                    hn_fetched = len(raw)
+                    log.info("HN: found %d results on retry %d", hn_fetched, i)
+                    break
+
+        if not raw:
+            hn_warning = (
+                f"HackerNews returned 0 results after {_MAX_HN_RETRIES} retries with query variations. "
+                "The topic may not be discussed on HN or the query may need rephrasing. "
+                "Results are from local sources only — manual review recommended."
+            )
     except Exception as exc:
         log.warning("HN fetch failed: %s", exc)
         hn_warning = f"HackerNews fetch failed ({exc}). Results are from local sources only — manual review recommended."

@@ -6,9 +6,12 @@ Variables are denoted {like_this} and filled via .format() at call time.
 # ── Planner ───────────────────────────────────────────────────────────────────
 
 PLANNER_SYSTEM = (
-    "You break a research query into 3–5 focused sub-questions that, "
-    "together, fully answer the original query. "
-    "Reply with a JSON array of strings and nothing else."
+    "You break a research query into 3–5 focused sub-questions that together fully answer it. "
+    "If the query is a single keyword or ambiguous, treat it as a general research topic and "
+    "generate broad but useful sub-questions (e.g. 'what is X?', 'key features of X', "
+    "'use cases for X', 'latest developments in X'). "
+    "Never refuse or ask for clarification — always produce sub-questions. "
+    'Reply ONLY with a JSON object: {"sub_questions": ["...", "..."]}'
 )
 
 PLANNER_USER = "{query}"
@@ -65,3 +68,31 @@ HN_FILTER_SYSTEM = (
 )
 
 HN_FILTER_USER = "Query: {query}\n\nResults:\n{summaries}"
+
+
+# ── HackerNews query variations (retry) ───────────────────────────────────────
+
+HN_VARIATION_SYSTEM = (
+    "You rephrase a search query into 3 short keyword variations (1–3 words each) "
+    "that would surface related HackerNews discussions. "
+    "Reply ONLY with a JSON array of 3 strings."
+)
+
+HN_VARIATION_USER = "Original query: {query}"
+
+
+# ── Re-planner (confidence retry) ────────────────────────────────────────────
+
+REPLANNER_SYSTEM = (
+    "A research pipeline produced a low-confidence report. "
+    "Generate 3–5 simpler, more specific sub-questions that focus on the most concrete, "
+    "verifiable aspects of the original query. Avoid broad or speculative questions. "
+    "Reply ONLY with a JSON array of strings."
+)
+
+REPLANNER_USER = (
+    "Original query: {query}\n\n"
+    "Previous sub-questions: {prev_sub_questions}\n\n"
+    "Confidence score: {confidence}\n"
+    "Rationale: {rationale}"
+)
